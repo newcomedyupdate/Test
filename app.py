@@ -13,7 +13,8 @@ file=st.file_uploader("Please upload CSV here")
 
 try:
   df=pd.read_csv(file)
+  st.write(df)
 except:
   st.write("Please Upload file to view")
 
-st.write(df)
+
