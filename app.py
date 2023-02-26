@@ -6,8 +6,4 @@ st.write("""
 number=st.slider("Hey pick number",0,10)
 
 
-print(number**2)
-
-st.write("""
-{number}
-""".(number))
+st.write("Square of number",number**2)
