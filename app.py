@@ -17,6 +17,6 @@ data = {'name': ['nick', 'david', 'joe', 'ross'],
 df = pd.DataFrame.from_dict(data)
 
 
-df=pd.read_csv("file")
+df=pd.read_csv(file)
 
 st.write(df)
