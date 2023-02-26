@@ -11,8 +11,9 @@ import pandas as pd
 st.write("Hey")
 file=st.file_uploader("Please upload CSV here")
 
-
-
-df=pd.read_csv(file)
+try:
+  df=pd.read_csv(file)
+except:
+  st.write("Please Upload file to view")
 
 st.write(df)
