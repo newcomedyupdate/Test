@@ -1,76 +1,88 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.linear_model import LinearRegression
-from sklearn.model_selection import train_test_split
 import pickle
 
-# Set page title
-st.set_page_config(page_title="Linear Regression Simulator")
+# Function to load the pickled model
+@st.cache(allow_output_mutation=True)
+def load_model():
+    with open('model.pkl', 'rb') as file:
+        model = pickle.load(file)
+    return model
 
-# Title and description
-st.title("Linear Regression Simulator")
-st.write("Upload a dataset, select features, and train a linear regression model. The trained model will be saved as a pickle file and can be used for predictions in the simulator section of the app.")
+# Function to get predictions using the loaded model
+def get_predictions(model, inputs):
+    return model.predict(inputs)
 
-# Upload dataset
-st.header("Upload Dataset")
-data_file = st.file_uploader("Upload CSV", type=["csv"])
+# Function to run the simulation
+def run_simulation(model, inputs):
+    # Get the predictions
+    predictions = get_predictions(model, inputs)
 
-if data_file is not None:
-    data = pd.read_csv(data_file)
-    st.write(data.head())
+    # Create a DataFrame with the results
+    results_df = pd.DataFrame({
+        'Input 1': inputs[:, 0],
+        'Input 2': inputs[:, 1],
+        'Prediction': predictions
+    })
 
-    # Choose label column
-    st.header("Choose Label Column")
-    label_col = st.selectbox("Select label column:", options=data.columns)
+    # Display the results
+    st.write('### Results')
+    st.write(results_df)
 
-    # Choose numerical and categorical features
-    st.header("Choose Features")
-    numerical_cols = data.select_dtypes(include=np.number).columns.tolist()
-    categorical_cols = data.select_dtypes(include='object').columns.tolist()
-    chosen_numerical_cols = st.multiselect("Select numerical features:", options=numerical_cols, default=numerical_cols)
-    chosen_categorical_cols = st.multiselect("Select categorical features:", options=categorical_cols, default=categorical_cols)
+# Main function
+def main():
+    # Set the page title and the page icon
+    st.set_page_config(page_title='Linear Regression Simulator', page_icon=':bar_chart:')
 
-    # Create X and y
-    X = data[chosen_numerical_cols + chosen_categorical_cols]
-    y = data[label_col]
+    # Load the pickled model
+    model = load_model()
 
-    # Convert categorical features to dummy variables
-    X = pd.get_dummies(X)
+    # Add a title
+    st.title('Linear Regression Simulator')
 
-    # Split data into train and test sets
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    # Add a subtitle
+    st.write('This app simulates a linear regression model using the pickled model.')
 
-    # Train model
-    st.header("Train Model")
-    model = LinearRegression()
-    model.fit(X_train, y_train)
+    # Add a file uploader
+    st.write('### Upload the data')
+    uploaded_file = st.file_uploader('Upload a CSV file', type='csv')
 
-    # Save model as pickle file
-    filename = 'model.pkl'
-    pickle.dump(model, open(filename, 'wb'))
+    # If the file is uploaded
+    if uploaded_file is not None:
+        # Load the data into a DataFrame
+        data = pd.read_csv(uploaded_file)
 
-    # Load model from pickle file
-    loaded_model = pickle.load(open(filename, 'rb'))
+        # Show the first 5 rows of the data
+        st.write('### Data preview')
+        st.write(data.head())
 
-    # Simulator
-    st.header("Simulator")
+        # Choose the input variables
+        st.write('### Choose the input variables')
+        input_columns = st.multiselect('Select the input variables', data.columns)
 
-    # Select feature values
-    feature_values = []
-    for col in X.columns:
-        if col in chosen_numerical_cols:
-            value = st.number_input(f"Enter value for {col}", step=0.01)
-        else:
-            value = st.selectbox(f"Select value for {col}", options=X[col].unique().tolist())
-        feature_values.append(value)
+        # Choose the target variable
+        st.write('### Choose the target variable')
+        target_column = st.selectbox('Select the target variable', data.columns)
 
-    # Predict using loaded model
-    prediction = loaded_model.predict([feature_values])[0]
+        # Split the data into inputs and target
+        inputs = data[input_columns].values
+        target = data[target_column].values
 
-    # Display prediction
-    st.write(f"Prediction: {prediction:.2f}")
+        # Add a slider for the number of simulations
+        st.write('### Choose the number of simulations')
+        num_simulations = st.slider('Number of simulations', min_value=1, max_value=100, value=10)
 
-    
+        # Add a button to run the simulation
+        run_simulation_button = st.button('Run simulation')
+
+        # If the simulation button is clicked
+        if run_simulation_button:
+            # Run the simulation
+            for i in range(num_simulations):
+                st.write(f'## Simulation {i+1}')
+                run_simulation(model, inputs)
+
+# Run the app
+if __name__ == '__main__':
+    main()
