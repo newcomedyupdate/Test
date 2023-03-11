@@ -1,92 +1,68 @@
 import streamlit as st
 import pandas as pd
+from sklearn.linear_model import TweedieRegressor
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score
 
+# Function to train the model and return the R-squared score
+def train_model(df, target_col):
+    # Split dataset into features and target
+    X = df.drop(target_col, axis=1)
+    y = df[target_col]
+    
+    # Split dataset into training and testing sets
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # Create pipeline with scaling and regression model
+    pipeline = make_pipeline(StandardScaler(), TweedieRegressor(power=1, alpha=0.5, link='log'))
+    
+    # Fit pipeline to training data
+    pipeline.fit(X_train, y_train)
+    
+    # Calculate and return R-squared score on testing data
+    score = pipeline.score(X_test, y_test)
+    return score, pipeline
 
-def get_dataset(file):
-    dataset = pd.read_csv(file)
-    return dataset
-
-
-def get_features(dataset):
-    numerical_features = list(dataset.select_dtypes(include=['int', 'float']).columns)
-    categorical_features = list(dataset.select_dtypes(include=['object']).columns)
-    return numerical_features, categorical_features
-
-
-def encode_categorical_features(dataset, categorical_features):
-    encoder = LabelEncoder()
-    for feature in categorical_features:
-        dataset[feature] = encoder.fit_transform(dataset[feature])
-    return dataset
-
-
-def train_model(dataset, numerical_features, categorical_features, label_column):
-    X = dataset[numerical_features + categorical_features]
-    y = dataset[label_column]
-
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-
-    rf = RandomForestClassifier()
-    rf.fit(X_train, y_train)
-
-    y_pred = rf.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-
-    return rf, accuracy
-
-
-def predict(model, numerical_features, categorical_features, inputs):
-    inputs = pd.DataFrame([inputs], columns=numerical_features + categorical_features)
-    prediction = model.predict(inputs)[0]
-    return prediction
-
-
-def simulate(model, numerical_features, categorical_features):
-    st.subheader("Simulator")
-    inputs = {}
-    for feature in numerical_features:
-        inputs[feature] = st.slider(f"{feature}:", float(dataset[feature].min()), float(dataset[feature].max()))
-
-    for feature in categorical_features:
-        inputs[feature] = st.selectbox(f"{feature}:", list(dataset[feature].unique()))
-
-    prediction = predict(model, numerical_features, categorical_features, inputs)
-    st.write("Prediction:", prediction)
-
-
-# Main function
+# Streamlit app
 def main():
-    st.title("Machine Learning App")
-    file = st.file_uploader("Upload Dataset", type=["csv"])
-    if not file:
-        st.warning("Please upload a CSV file.")
-        return
-
-    dataset = get_dataset(file)
-
-    st.subheader("Data")
-
-    label_column = st.selectbox("Select Label Column", list(dataset.columns))
-    numerical_features, categorical_features = get_features(dataset)
-    dataset = encode_categorical_features(dataset, categorical_features)
-
-    st.write(dataset)
-
-    if len(numerical_features) == 0 or len(categorical_features) == 0 or not label_column:
-        st.warning("Please choose appropriate columns for features and label.")
-        return
-
-    model, accuracy = train_model(dataset, numerical_features, categorical_features, label_column)
-
-    st.subheader("Model Performance")
-    st.write(f"Accuracy: {accuracy:.2f}")
-
-    simulate(model, numerical_features, categorical_features)
-
-
+    # Set page title
+    st.set_page_config(page_title="Generalized Linear Regression")
+    
+    # Add title and description
+    st.title("Generalized Linear Regression")
+    st.write("Upload a CSV file and select the target variable to perform generalized linear regression on the data.")
+    
+    # Add file uploader and target variable selector
+    uploaded_file = st.file_uploader("Upload CSV file", type="csv")
+    if uploaded_file is not None:
+        df = pd.read_csv(uploaded_file)
+        target_col = st.selectbox("Select target variable", options=df.columns)
+        
+        # Train the model and show R-squared score
+        try:
+            score, model = train_model(df, target_col)
+            st.write(f"R-squared score: {score:.2f}")
+        except Exception as e:
+            st.write(f"Error: {e}")
+        
+        # Add sliders for model parameters and predict button
+        st.write("Use the sliders to adjust the model parameters, then click 'Predict' to make a prediction.")
+        power = st.slider("Power", min_value=0.1, max_value=2.0, value=1.0, step=0.1)
+        alpha = st.slider("Alpha", min_value=0.1, max_value=1.0, value=0.5, step=0.1)
+        link = st.selectbox("Link", options=["auto", "log", "identity", "sqrt", "inverse"])
+        predict_button = st.button("Predict")
+        
+        # Predict on new data using the model and user-selected parameters
+        if predict_button:
+            new_data = {}
+            for col in df.columns:
+                if col != target_col:
+                    value = st.number_input(col)
+                    new_data[col] = [value]
+            new_df = pd.DataFrame(new_data)
+            prediction = model.predict(new_df)
+            st.write(f"Prediction: {prediction[0]:.2f}")
+        
 if __name__ == '__main__':
     main()
