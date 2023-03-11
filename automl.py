@@ -3,86 +3,78 @@ import pandas as pd
 import numpy as np
 import pickle
 
-# Function to load the pickled model
-@st.cache(allow_output_mutation=True)
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score, mean_squared_error
+
+# Function to load the saved model from pickle file
 def load_model():
     with open('model.pkl', 'rb') as file:
         model = pickle.load(file)
     return model
 
-# Function to get predictions using the loaded model
-def get_predictions(model, inputs):
-    return model.predict(inputs)
+# Function to predict the target variable using the user-input values
+def predict(model, features):
+    return model.predict(features)
 
-# Function to run the simulation
-def run_simulation(model, inputs):
-    # Get the predictions
-    predictions = get_predictions(model, inputs)
+# Function to simulate the model with random values
+def simulate(model, n_samples=100):
+    np.random.seed(0)
+    features = np.random.randn(n_samples, len(model.coef_))
+    target = predict(model, features)
+    return features, target
 
-    # Create a DataFrame with the results
-    results_df = pd.DataFrame({
-        'Input 1': inputs[:, 0],
-        'Input 2': inputs[:, 1],
-        'Prediction': predictions
-    })
+# Function to train the linear regression model and save it to a pickle file
+def train_and_save_model(df, target_col):
+    X = df.drop(target_col, axis=1)
+    y = df[target_col]
+    model = LinearRegression().fit(X, y)
+    with open('model.pkl', 'wb') as file:
+        pickle.dump(model, file)
+    return model
 
-    # Display the results
-    st.write('### Results')
-    st.write(results_df)
-
-# Main function
+# Streamlit app code
 def main():
-    # Set the page title and the page icon
-    st.set_page_config(page_title='Linear Regression Simulator', page_icon=':bar_chart:')
+    st.set_page_config(page_title='Linear Regression Simulator', page_icon=':bar_chart:', layout='wide')
 
-    # Load the pickled model
-    model = load_model()
-
-    # Add a title
     st.title('Linear Regression Simulator')
 
-    # Add a subtitle
-    st.write('This app simulates a linear regression model using the pickled model.')
+    # File upload feature
+    file = st.file_uploader('Upload a CSV file', type=['csv'])
+    if not file:
+        st.warning('Please upload a CSV file')
+        return
 
-    # Add a file uploader
-    st.write('### Upload the data')
-    uploaded_file = st.file_uploader('Upload a CSV file', type='csv')
+    # Read the uploaded file as a DataFrame
+    df = pd.read_csv(file)
 
-    # If the file is uploaded
-    if uploaded_file is not None:
-        # Load the data into a DataFrame
-        data = pd.read_csv(uploaded_file)
+    # Column selection feature
+    st.subheader('Select the target variable')
+    target_col = st.selectbox('Column', df.columns)
 
-        # Show the first 5 rows of the data
-        st.write('### Data preview')
-        st.write(data.head())
+    # Model simulation feature
+    if st.button('Simulate Model'):
+        try:
+            # Load the saved model from pickle file
+            model = load_model()
+        except:
+            # Train and save the model if the pickle file is not found
+            st.warning('Model not found. Training a new model...')
+            model = train_and_save_model(df, target_col)
 
-        # Choose the input variables
-        st.write('### Choose the input variables')
-        input_columns = st.multiselect('Select the input variables', data.columns)
+        # Simulate the model with random values
+        features, target = simulate(model)
 
-        # Choose the target variable
-        st.write('### Choose the target variable')
-        target_column = st.selectbox('Select the target variable', data.columns)
+        # Show the model performance metrics
+        r2 = r2_score(target, predict(model, features))
+        mse = mean_squared_error(target, predict(model, features))
+        st.write('Model R^2:', r2)
+        st.write('Model MSE:', mse)
 
-        # Split the data into inputs and target
-        inputs = data[input_columns].values
-        target = data[target_column].values
+        # Show the simulated data and predicted target variable
+        st.subheader('Simulated Data')
+        st.write(pd.DataFrame(features))
+        st.subheader('Predicted Target')
+        st.write(pd.DataFrame(target))
 
-        # Add a slider for the number of simulations
-        st.write('### Choose the number of simulations')
-        num_simulations = st.slider('Number of simulations', min_value=1, max_value=100, value=10)
-
-        # Add a button to run the simulation
-        run_simulation_button = st.button('Run simulation')
-
-        # If the simulation button is clicked
-        if run_simulation_button:
-            # Run the simulation
-            for i in range(num_simulations):
-                st.write(f'## Simulation {i+1}')
-                run_simulation(model, inputs)
-
-# Run the app
 if __name__ == '__main__':
     main()
