@@ -1,77 +1,92 @@
 import streamlit as st
 import pandas as pd
-import pickle
-from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
 
-# Define the input form for the model simulator
-def input_form(data, feature_names, feature_types, scaler):
-    st.write("Enter values for the following features to predict the label.")
-    input_values = {}
-    for i, feature_name in enumerate(feature_names):
-        st.write(f"**{feature_name}** ({feature_types[i]})")
-        if feature_types[i] == 'numerical':
-            input_values[feature_name] = st.number_input("", value=0.0, step=0.01)
-        elif feature_types[i] == 'categorical':
-            unique_values = data[feature_name].unique()
-            input_values[feature_name] = st.selectbox("", unique_values)
-        elif feature_types[i] == 'date':
-            input_values[feature_name] = st.date_input("", value=None, min_value=None, max_value=None)
-    # Convert the input values to a pandas DataFrame and scale the numerical features
-    input_data = pd.DataFrame([input_values])
-    for i, feature_type in enumerate(feature_types):
-        if feature_type == 'numerical':
-            input_data[feature_names[i]] = scaler.transform(input_data[[feature_names[i]]])
-    return input_data
 
-# Load the saved model and scaler
-with open('model.pkl', 'rb') as file:
-    model = pickle.load(file)
-with open('scaler.pkl', 'rb') as file:
-    scaler = pickle.load(file)
+def get_dataset(file):
+    dataset = pd.read_csv(file)
+    return dataset
 
-# Define the main function for the Streamlit app
+
+def get_features(dataset):
+    numerical_features = list(dataset.select_dtypes(include=['int', 'float']).columns)
+    categorical_features = list(dataset.select_dtypes(include=['object']).columns)
+    return numerical_features, categorical_features
+
+
+def encode_categorical_features(dataset, categorical_features):
+    encoder = LabelEncoder()
+    for feature in categorical_features:
+        dataset[feature] = encoder.fit_transform(dataset[feature])
+    return dataset
+
+
+def train_model(dataset, numerical_features, categorical_features, label_column):
+    X = dataset[numerical_features + categorical_features]
+    y = dataset[label_column]
+
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+
+    rf = RandomForestClassifier()
+    rf.fit(X_train, y_train)
+
+    y_pred = rf.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+
+    return rf, accuracy
+
+
+def predict(model, numerical_features, categorical_features, inputs):
+    inputs = pd.DataFrame([inputs], columns=numerical_features + categorical_features)
+    prediction = model.predict(inputs)[0]
+    return prediction
+
+
+def simulate(model, numerical_features, categorical_features):
+    st.subheader("Simulator")
+    inputs = {}
+    for feature in numerical_features:
+        inputs[feature] = st.slider(f"{feature}:", float(dataset[feature].min()), float(dataset[feature].max()))
+
+    for feature in categorical_features:
+        inputs[feature] = st.selectbox(f"{feature}:", list(dataset[feature].unique()))
+
+    prediction = predict(model, numerical_features, categorical_features, inputs)
+    st.write("Prediction:", prediction)
+
+
+# Main function
 def main():
-    # Upload a dataset
-    st.title("Model Simulator")
-    uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
-    if uploaded_file is not None:
-        data = pd.read_csv(uploaded_file)
+    st.title("Machine Learning App")
+    file = st.file_uploader("Upload Dataset", type=["csv"])
+    if not file:
+        st.warning("Please upload a CSV file.")
+        return
 
-        # Select the feature and label columns
-        st.write("Select the feature and label columns.")
-        feature_names = st.multiselect("Select feature columns", data.columns)
-        label_name = st.selectbox("Select label column", data.columns)
-        feature_types = []
-        for feature_name in feature_names:
-            if data[feature_name].dtype == 'float64' or data[feature_name].dtype == 'int64':
-                feature_types.append('numerical')
-            elif data[feature_name].dtype == 'object':
-                feature_types.append('categorical')
-            elif data[feature_name].dtype == 'datetime64':
-                feature_types.append('date')
+    dataset = get_dataset(file)
 
-        # Make sure all necessary columns are selected
-        if len(feature_names) == 0:
-            st.warning("Please select at least one feature column.")
-        elif label_name == '':
-            st.warning("Please select a label column.")
-        elif label_name not in data.columns:
-            st.warning("Label column not found in dataset.")
-        else:
-            # Scale the numerical features
-            scaler.fit(data[feature_names])
-            data[feature_names] = scaler.transform(data[feature_names])
+    st.subheader("Data")
 
-            # Define the input form for the model simulator
-            input_data = input_form(data, feature_names, feature_types, scaler)
+    label_column = st.selectbox("Select Label Column", list(dataset.columns))
+    numerical_features, categorical_features = get_features(dataset)
+    dataset = encode_categorical_features(dataset, categorical_features)
 
-            # Make a prediction using the model
-            predicted_label = model.predict(input_data)[0]
+    st.write(dataset)
 
-            # Display the predicted label to the user
-            st.subheader("Predicted Label")
-            st.write(predicted_label)
+    if len(numerical_features) == 0 or len(categorical_features) == 0 or not label_column:
+        st.warning("Please choose appropriate columns for features and label.")
+        return
 
-# Run the Streamlit app
+    model, accuracy = train_model(dataset, numerical_features, categorical_features, label_column)
+
+    st.subheader("Model Performance")
+    st.write(f"Accuracy: {accuracy:.2f}")
+
+    simulate(model, numerical_features, categorical_features)
+
+
 if __name__ == '__main__':
     main()
